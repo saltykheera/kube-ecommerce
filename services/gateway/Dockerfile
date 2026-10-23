@@ -11,7 +11,10 @@ RUN addgroup --system --gid 1000 appgroup && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY models.py database.py aggregator.py server.py ./
+COPY models/ ./models/
+COPY core/ ./core/
+COPY controllers/ ./controllers/
+COPY database.py aggregator.py server.py ./
 
 USER appuser
 
