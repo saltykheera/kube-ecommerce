@@ -1,0 +1,81 @@
+{{- if .Values.mcpUpstreams.woocommerce.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-woocommerce
+  labels:
+    app.kubernetes.io/name: mcp-woocommerce
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.mcpUpstreams.woocommerce.port | default 8000 }}
+      targetPort: 8000
+      name: http
+  selector:
+    app.kubernetes.io/name: mcp-woocommerce
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-woocommerce
+  labels:
+    app.kubernetes.io/name: mcp-woocommerce
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-woocommerce
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-woocommerce
+        app.kubernetes.io/part-of: ecommerce-stack
+    spec:
+      containers:
+        - name: mcp-woocommerce
+          image: "{{ .Values.mcpUpstreams.woocommerce.image.repository }}:{{ .Values.mcpUpstreams.woocommerce.image.tag }}"
+          imagePullPolicy: {{ .Values.mcpUpstreams.woocommerce.image.pullPolicy | default "Never" }}
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: WOOCOMMERCE_INTERNAL_URL
+              value: "http://wordpress.default.svc.cluster.local:80"
+            - name: WOOCOMMERCE_HOST_HEADER
+              value: {{ .Values.global.domains.store | default "store.local" | quote }}
+            - name: PORT
+              value: "8000"
+            - name: WOOCOMMERCE_CONSUMER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: woocommerce-keys-secret
+                  key: woocommerce-consumer-key
+            - name: WOOCOMMERCE_CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: woocommerce-keys-secret
+                  key: woocommerce-consumer-secret
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+{{- end }}

@@ -87,3 +87,8 @@ mcpUpstreams:
       tag: local
       pullPolicy: Never
     port: 8002
+
+woocommerceSecrets:
+  consumerKey: "ck_3c7d87126156d3c23d8c93b6e9f7f3d36512dc4f"
+  consumerSecret: "cs_bbcf039712fb40cd4975095836f8401a5ece7207"
+
