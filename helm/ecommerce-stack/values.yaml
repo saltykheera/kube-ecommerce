@@ -1,0 +1,89 @@
+# Default values for ecommerce-stack (Local k3d environment)
+global:
+  domains:
+    store: store.local
+    gateway: gateway.local
+    dashboard: dashboard.local
+
+mariadb:
+  enabled: true
+  database: wordpress
+  user: wp_user
+  password: wp_secure_password
+  rootPassword: root_secure_password
+  persistence:
+    size: 2Gi
+    storageClass: local-path
+
+wordpress:
+  enabled: true
+  image:
+    repository: wordpress
+    tag: 6.7-apache
+    pullPolicy: IfNotPresent
+  tablePrefix: wp_
+  persistence:
+    size: 5Gi
+    storageClass: local-path
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+postgres:
+  enabled: true
+  database: gateway_db
+  user: gateway_user
+  password: gateway_secure_password
+  persistence:
+    size: 2Gi
+    storageClass: local-path
+
+gateway:
+  enabled: true
+  image:
+    repository: ecommerce-gateway
+    tag: local
+    pullPolicy: Never
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+dashboard:
+  enabled: true
+  image:
+    repository: ecommerce-dashboard
+    tag: local
+    pullPolicy: Never
+  replicas: 1
+
+mcpUpstreams:
+  woocommerce:
+    enabled: true
+    image:
+      repository: mcp-woocommerce
+      tag: local
+      pullPolicy: Never
+    port: 8000
+  calculator:
+    enabled: true
+    image:
+      repository: mcp-calculator
+      tag: local
+      pullPolicy: Never
+    port: 8001
+  metrics:
+    enabled: true
+    image:
+      repository: mcp-metrics
+      tag: local
+      pullPolicy: Never
+    port: 8002

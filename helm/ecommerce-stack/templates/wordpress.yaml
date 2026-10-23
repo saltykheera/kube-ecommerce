@@ -1,0 +1,104 @@
+{{- if .Values.wordpress.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-pvc
+  labels:
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.wordpress.persistence.storageClass | default "local-path" }}
+  resources:
+    requests:
+      storage: {{ .Values.wordpress.persistence.size | default "5Gi" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  labels:
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  selector:
+    app.kubernetes.io/name: wordpress
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  labels:
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wordpress
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wordpress
+        app.kubernetes.io/part-of: ecommerce-stack
+    spec:
+      containers:
+        - name: wordpress
+          image: "{{ .Values.wordpress.image.repository }}:{{ .Values.wordpress.image.tag }}"
+          imagePullPolicy: {{ .Values.wordpress.image.pullPolicy | default "IfNotPresent" }}
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: "mariadb:3306"
+            - name: WORDPRESS_DB_NAME
+              value: {{ .Values.mariadb.database | quote }}
+            - name: WORDPRESS_DB_USER
+              value: {{ .Values.mariadb.user | quote }}
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wordpress-secret
+                  key: wordpress-db-password
+            - name: WORDPRESS_TABLE_PREFIX
+              value: {{ .Values.wordpress.tablePrefix | default "wp_" | quote }}
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: wordpress-data
+              mountPath: /var/www/html
+          readinessProbe:
+            httpGet:
+              path: /wp-includes/images/blank.gif
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /wp-includes/images/blank.gif
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: {{ .Values.wordpress.resources.requests.cpu | default "100m" }}
+              memory: {{ .Values.wordpress.resources.requests.memory | default "256Mi" }}
+            limits:
+              cpu: {{ .Values.wordpress.resources.limits.cpu | default "500m" }}
+              memory: {{ .Values.wordpress.resources.limits.memory | default "512Mi" }}
+      volumes:
+        - name: wordpress-data
+          persistentVolumeClaim:
+            claimName: wordpress-pvc
+{{- end }}

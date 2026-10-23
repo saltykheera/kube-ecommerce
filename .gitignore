@@ -1,0 +1,22 @@
+# Personal & planning notes
+plan.md
+selfnote.md
+exec_plan/
+*assignment*
+*.txt
+
+# Secrets & Environment
+*.env*
+!*.env.example
+
+# macOS system files
+.DS_Store
+
+# Python & Node build artifacts
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+dist/
+build/
