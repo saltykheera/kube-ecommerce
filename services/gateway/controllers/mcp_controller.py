@@ -1,6 +1,7 @@
 """
 MCP Protocol Controller.
 Exposes the central /mcp endpoint implementing the Model Context Protocol (Streamable HTTP / JSON-RPC 2.0).
+Enforces API key authentication, immediate key revocation, role-based access control (RBAC), and PostgreSQL audit logging.
 """
 
 import time
@@ -14,6 +15,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from aggregator import aggregator
 from database import get_session
 from core.dependencies import authenticate_mcp_caller
+from core.rbac import is_tool_allowed_for_role
 from models.audit_log import AuditLog
 from models.user import User
 from models.api_key import APIKey
@@ -30,7 +32,7 @@ async def handle_mcp_request(
 ):
     """
     Exposes the unified outward-facing MCP protocol endpoint for external clients.
-    Supports JSON-RPC 2.0 over Streamable HTTP (SSE).
+    Secured by Bearer API Key authentication with instant revocation and RBAC.
     """
     try:
         body = await request.json()
@@ -44,10 +46,40 @@ async def handle_mcp_request(
     method = body.get("method")
     params = body.get("params", {})
 
-    # Authenticate caller if Bearer key is provided
-    user, api_key = await authenticate_mcp_caller(authorization, session)
+    # ========================================================================
+    # 1. API Key Authentication & Immediate Revocation Enforcement
+    # ========================================================================
+    user, api_key, auth_error = await authenticate_mcp_caller(authorization, session)
 
-    # 1. MCP Initialization
+    if auth_error:
+        logger.warning(f"Unauthorized MCP request rejected: {auth_error} (method: {method})")
+        
+        # Log unauthorized attempt to audit table
+        try:
+            audit_record = AuditLog(
+                user_id=None,
+                user_email=None,
+                api_key_id=None,
+                server_slug="gateway",
+                tool_name=method or "unknown",
+                arguments=json.dumps(params),
+                status="unauthorized",
+                duration_ms=0.0,
+                error_message=auth_error,
+            )
+            session.add(audit_record)
+            await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to record unauthorized audit log: {e}")
+
+        return JSONResponse(
+            status_code=401,
+            content={"jsonrpc": "2.0", "id": req_id, "error": {"code": -32001, "message": auth_error}}
+        )
+
+    # ========================================================================
+    # 2. MCP Handshake / Initialization
+    # ========================================================================
     if method == "initialize":
         response_data = {
             "jsonrpc": "2.0",
@@ -63,13 +95,15 @@ async def handle_mcp_request(
                     "name": "team-mcp-gateway",
                     "version": "1.0.0",
                 },
-                "instructions": "Unified Team MCP Gateway aggregating WooCommerce, Calculator, and Business Metrics tools.",
+                "instructions": f"Team MCP Gateway authenticated for {user.email} (Role: {user.role.value}).",
             }
         }
         sse_text = f"event: message\ndata: {json.dumps(response_data)}\n\n"
         return Response(content=sse_text, media_type="text/event-stream")
 
-    # 2. Tools Discovery (tools/list)
+    # ========================================================================
+    # 3. Tool Discovery (tools/list)
+    # ========================================================================
     elif method == "tools/list":
         tools = await aggregator.refresh_tools()
         response_data = {
@@ -82,7 +116,9 @@ async def handle_mcp_request(
         sse_text = f"event: message\ndata: {json.dumps(response_data)}\n\n"
         return Response(content=sse_text, media_type="text/event-stream")
 
-    # 3. Tool Execution (tools/call)
+    # ========================================================================
+    # 4. Tool Execution (tools/call) with RBAC & Audit Trail
+    # ========================================================================
     elif method == "tools/call":
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
@@ -92,9 +128,46 @@ async def handle_mcp_request(
                 content={"jsonrpc": "2.0", "id": req_id, "error": {"code": -32602, "message": "Missing 'name' in params"}}
             )
 
+        slug = tool_name.split("__")[0] if "__" in tool_name else "unknown"
+
+        # Check Role-Based Access Control (RBAC)
+        is_allowed, rbac_error = is_tool_allowed_for_role(tool_name, user.role)
+        if not is_allowed:
+            logger.warning(f"RBAC Rejection: User '{user.email}' (role: {user.role.value}) attempted '{tool_name}'")
+            
+            # Record forbidden attempt in PostgreSQL audit table
+            try:
+                audit_record = AuditLog(
+                    user_id=user.id,
+                    user_email=user.email,
+                    api_key_id=api_key.id,
+                    server_slug=slug,
+                    tool_name=tool_name,
+                    arguments=json.dumps(arguments),
+                    status="forbidden",
+                    duration_ms=0.0,
+                    error_message=rbac_error,
+                )
+                session.add(audit_record)
+                await session.commit()
+            except Exception as e:
+                logger.error(f"Failed to record forbidden audit log: {e}")
+
+            response_data = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "isError": True,
+                    "content": [{"type": "text", "text": rbac_error}]
+                }
+            }
+            sse_text = f"event: message\ndata: {json.dumps(response_data)}\n\n"
+            return Response(content=sse_text, media_type="text/event-stream")
+
+        # Execute Tool Call
         start_time = time.perf_counter()
-        logger.info(f"Gateway executing tool: {tool_name} with caller: {user.email if user else 'anonymous'}")
-        
+        logger.info(f"Gateway executing tool: {tool_name} for caller: {user.email} (Role: {user.role.value})")
+
         result = await aggregator.call_tool(tool_name, arguments)
         duration_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
 
@@ -104,11 +177,10 @@ async def handle_mcp_request(
 
         # Record audit log entry in PostgreSQL
         try:
-            slug = tool_name.split("__")[0] if "__" in tool_name else "unknown"
             audit_record = AuditLog(
-                user_id=user.id if user else None,
-                user_email=user.email if user else None,
-                api_key_id=api_key.id if api_key else None,
+                user_id=user.id,
+                user_email=user.email,
+                api_key_id=api_key.id,
                 server_slug=slug,
                 tool_name=tool_name,
                 arguments=json.dumps(arguments),
@@ -129,7 +201,9 @@ async def handle_mcp_request(
         sse_text = f"event: message\ndata: {json.dumps(response_data)}\n\n"
         return Response(content=sse_text, media_type="text/event-stream")
 
-    # 4. Unknown / Unsupported MCP Method
+    # ========================================================================
+    # 5. Unknown / Unsupported MCP Method
+    # ========================================================================
     else:
         return JSONResponse(
             content={"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}}

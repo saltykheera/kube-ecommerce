@@ -69,20 +69,21 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 async def authenticate_mcp_caller(
     authorization: Optional[str] = Header(None),
     session: AsyncSession = Depends(get_session)
-) -> tuple[Optional[User], Optional[APIKey]]:
+) -> tuple[Optional[User], Optional[APIKey], Optional[str]]:
     """
     Validates the caller's API key.
-    If no authorization header is supplied or invalid/revoked, handles accordingly.
     Returns:
-        (user, api_key)
+        (user, api_key, error_message)
+        If valid: (user, api_key, None)
+        If invalid: (None, None, "error description")
     """
     if not authorization:
-        return None, None
+        return None, None, "Missing Authorization header. Expected 'Authorization: Bearer <mcp_live_...>'"
 
     # Parse Bearer token
     parts = authorization.strip().split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        return None, None
+        return None, None, "Invalid Authorization header format. Expected 'Bearer <mcp_live_...>'"
 
     raw_key = parts[1].strip()
     key_hash = hash_api_key(raw_key)
@@ -93,15 +94,15 @@ async def authenticate_mcp_caller(
     api_key = result.first()
 
     if not api_key:
-        return None, None
+        return None, None, "Invalid API key: Key does not exist."
 
     # Immediate rejection if key has been revoked
     if not api_key.is_active:
-        return None, None
+        return None, None, "Unauthorized: This API key has been revoked."
 
     # Fetch corresponding user
     user = await session.get(User, api_key.user_id)
     if not user or not user.is_active:
-        return None, None
+        return None, None, "Unauthorized: User account associated with this key is inactive or deleted."
 
-    return user, api_key
+    return user, api_key, None
