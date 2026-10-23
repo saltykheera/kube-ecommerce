@@ -20,6 +20,7 @@ from controllers import (
     tool_router,
     audit_router,
     mcp_router,
+    chat_router,
 )
 
 load_dotenv()
@@ -63,6 +64,7 @@ app.include_router(server_router)
 app.include_router(tool_router)
 app.include_router(audit_router)
 app.include_router(mcp_router)
+app.include_router(chat_router)
 
 
 # Health Check Endpoint

@@ -56,6 +56,12 @@ spec:
               value: "http://mcp-calculator:8001/mcp"
             - name: METRICS_MCP_URL
               value: "http://mcp-metrics:8002/mcp"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gemini-secret
+                  key: gemini-api-key
+                  optional: true
           readinessProbe:
             httpGet:
               path: /health

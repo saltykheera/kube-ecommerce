@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY models/ ./models/
 COPY core/ ./core/
 COPY controllers/ ./controllers/
+COPY agent/ ./agent/
 COPY database.py aggregator.py server.py ./
 
 USER appuser
