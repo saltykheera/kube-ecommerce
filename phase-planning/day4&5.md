@@ -66,3 +66,62 @@ The gateway implements these essential capabilities:
 ---
 
 Would you like to start implementing **Phase 1** (the two additional MCP servers) now?
+
+
+
+
+
+The Objective of Phase 2
+We will build the FastAPI MCP Gateway and deploy its backing PostgreSQL database into Kubernetes. The gateway will expose a single entry point on http://gateway.local/mcp that aggregates all three upstream servers into one unified tool catalog.
+
+Architecture & Components
+                          [ External Client: Claude / Cursor / Inspector ]
+                                                │
+                                                ▼  http://gateway.local/mcp
+┌───────────────────────────────────────────────┴───────────────────────────────────────────────┐
+│                                    FastAPI MCP Gateway                                        │
+│                                                                                               │
+│  [ Aggregator & Router ]                     [ Server Registry ]        [ Failure Containment]│
+│  • Namespaces tools (woo__, calc__, metrics__)• Backed by PostgreSQL    • 3s timeout per call │
+│  • Routes tools/call to correct upstream     • Dynamic enable/disable   • Dead server != crash│
+└───────┬───────────────────────────────────────┬───────────────────────────────────────┬───────┘
+        │ (Internal: port 8000)                 │ (Internal: port 8001)                 │ (Internal: port 8002)
+        ▼                                       ▼                                       ▼
+  [ mcp-woocommerce ]                     [ mcp-calculator ]                      [ mcp-metrics ]
+  (5 tools)                               (3 tools)                               (3 tools)
+Key Capabilities We Will Implement
+Tool Aggregation & Namespacing (Solves Name Collisions):
+
+External clients see 11 namespaced tools:
+woo__list_products, woo__create_product, etc.
+calc__calculate, calc__tax_calculation, etc.
+metrics__get_sales_target, metrics__calculate_revenue_summary, etc.
+When a call arrives for woo__list_products, the gateway strips woo__ and routes the request to http://mcp-woocommerce:8000/mcp.
+Fault Tolerance & Timeouts:
+
+Each upstream call is bounded by a 3-second timeout.
+If one server is slow or crashes, the gateway marks it as unreachable and continues returning tools from the other live servers without failing.
+PostgreSQL Server Registry:
+
+Stores registered upstream servers (id, name, url, prefix, is_enabled, status).
+Seeded on startup with the 3 default servers.
+REST Management APIs (for Day 8 Dashboard):
+
+GET /api/servers — View connected/unreachable/disabled status of each server.
+POST /api/servers/{id}/toggle — Enable or disable a server on the fly (instantly adding or removing its tools from discovery).
+Files to Create / Deploy
+helm/ecommerce-stack/templates/postgres.yaml:
+PostgreSQL 16 Deployment, PVC (postgres-pvc, 2Gi), and Service on port 5432.
+services/gateway/:
+pyproject.toml / requirements.txt: FastAPI, Uvicorn, SQLModel / SQLAlchemy, Asyncpg, Httpx, MCP SDK.
+models.py: Database schema for Upstream Servers.
+mcp_client.py: Async client engine to communicate with upstream servers with timeout containment.
+server.py: FastAPI application exposing both /mcp (Streamable HTTP) and REST management APIs.
+Dockerfile: Minimal non-root container image.
+helm/ecommerce-stack/templates/gateway.yaml:
+Gateway Deployment, ClusterIP Service, and Ingress routing http://gateway.local to the gateway.
+Verification Flow (Definition of Done)
+Connect MCP Inspector to http://gateway.local/mcp:
+Verify all 11 tools appear with their clean namespaces.
+Execute a product tool (woo__list_products) and a calculator tool (calc__calculate) through the single gateway URL.
+Fault tolerance test: Deliberately kill mcp-calculator pod $\rightarrow$ prove that woo__... and metrics__... tools still work smoothly.
