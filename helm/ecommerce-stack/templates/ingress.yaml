@@ -28,3 +28,13 @@ spec:
                 name: gateway
                 port:
                   number: 8000
+    - host: {{ .Values.global.domains.dashboard | default "dashboard.local" }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port:
+                  number: 80
