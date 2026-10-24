@@ -1,0 +1,298 @@
+{{- if .Values.networkPolicy.enabled }}
+# ==============================================================================
+# NetworkPolicy: Zero-Trust Pod Isolation & Microsegmentation
+# Restricts traffic across Gateway, Upstreams, Databases, and Frontend.
+# ==============================================================================
+
+# 1. Isolate Upstream MCP Servers (Only Gateway can reach them)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-mcp-upstreams
+  labels:
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - mcp-woocommerce
+          - mcp-calculator
+          - mcp-metrics
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only allow traffic originating from the Gateway pod
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 8001
+        - protocol: TCP
+          port: 8002
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow mcp-woocommerce to call WooCommerce REST API on WordPress
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: wordpress
+      ports:
+        - protocol: TCP
+          port: 80
+---
+# 2. Isolate Gateway PostgreSQL (Only Gateway can access database)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-postgres
+  labels:
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only allow traffic from Gateway
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# 3. Isolate Storefront MariaDB (Only WordPress can access database)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-wordpress-to-mariadb
+  labels:
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mariadb
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only allow traffic from WordPress
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: wordpress
+      ports:
+        - protocol: TCP
+          port: 3306
+---
+# 4. Central Gateway Ingress & Egress Boundaries
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-boundary-policy
+  labels:
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Ingress Controller (Traefik) in kube-system
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow Dashboard pod (reverse proxy /api requests)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dashboard
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow local probe / self traffic
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # Egress to PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Egress to MCP Upstreams
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - mcp-woocommerce
+                  - mcp-calculator
+                  - mcp-metrics
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 8001
+        - protocol: TCP
+          port: 8002
+    # Egress to CoreDNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Egress to Internet (HTTPS 443) for Gemini AI API
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# 5. Dashboard Ingress & Egress Boundaries
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard-boundary-policy
+  labels:
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: dashboard
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Ingress Controller (Traefik) in kube-system
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 80
+  egress:
+    # Egress to Gateway API
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Egress to CoreDNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# 6. WordPress Storefront Ingress & Egress Boundaries
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wordpress-boundary-policy
+  labels:
+    app.kubernetes.io/part-of: ecommerce-stack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wordpress
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Ingress Controller (Traefik) in kube-system
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 80
+    # Allow mcp-woocommerce to call WooCommerce REST API
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-woocommerce
+      ports:
+        - protocol: TCP
+          port: 80
+  egress:
+    # Egress to MariaDB
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mariadb
+      ports:
+        - protocol: TCP
+          port: 3306
+    # Egress to CoreDNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Egress to Internet for WordPress/WooCommerce HTTP updates
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+{{- end }}

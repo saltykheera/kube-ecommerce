@@ -95,3 +95,5 @@ woocommerceSecrets:
 secrets:
   geminiApiKey: ""
 
+networkPolicy:
+  enabled: true
