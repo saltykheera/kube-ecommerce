@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/servers", tags=["Server Registry"])
 @router.get("", response_model=list[UpstreamServerRead])
 async def list_servers(session: AsyncSession = Depends(get_session)):
     """List all registered upstream MCP servers and their current status."""
+    await aggregator.refresh_tools()
     result = await session.exec(select(UpstreamServer))
     return result.all()
 

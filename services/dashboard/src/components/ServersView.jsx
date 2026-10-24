@@ -10,6 +10,7 @@ import {
   Clock,
   Layers,
   ShieldAlert,
+  AlertTriangle,
 } from 'lucide-react';
 import HedgehogMascot from './HedgehogMascot';
 
@@ -53,7 +54,10 @@ export default function ServersView({ user }) {
   };
 
   const isServerActive = (s) => (s.is_enabled !== undefined ? s.is_enabled : s.is_active);
+  const isServerConnected = (s) => isServerActive(s) && s.status === 'connected';
+
   const getToolCount = (s) => {
+    if (!isServerConnected(s)) return 0;
     if (s.tools_count !== undefined) return s.tools_count;
     if (s.slug === 'woo') return 5;
     if (s.slug === 'calc') return 3;
@@ -61,8 +65,8 @@ export default function ServersView({ user }) {
     return 0;
   };
 
-  const totalTools = servers.reduce((acc, s) => (isServerActive(s) ? acc + getToolCount(s) : acc), 0);
-  const activeServers = servers.filter((s) => isServerActive(s)).length;
+  const totalTools = servers.reduce((acc, s) => acc + getToolCount(s), 0);
+  const activeServers = servers.filter((s) => isServerConnected(s)).length;
 
   return (
     <div id="servers-view">
@@ -145,8 +149,14 @@ export default function ServersView({ user }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
         {servers.map((server) => {
           const isToggling = togglingId === server.id;
-          const active = isServerActive(server);
+          const isEnabled = isServerActive(server);
+          const isUnreachable = isEnabled && server.status === 'unreachable';
+          const isConnected = isEnabled && server.status === 'connected';
           const toolCount = getToolCount(server);
+
+          let borderLeftColor = 'var(--accent-green)';
+          if (!isEnabled) borderLeftColor = 'var(--stone)';
+          else if (isUnreachable) borderLeftColor = 'var(--accent-red)';
 
           return (
             <div
@@ -157,7 +167,7 @@ export default function ServersView({ user }) {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                borderLeft: active ? '4px solid var(--accent-green)' : '4px solid var(--accent-red)',
+                borderLeft: `4px solid ${borderLeftColor}`,
               }}
             >
               <div>
@@ -176,7 +186,7 @@ export default function ServersView({ user }) {
                   <label className="toggle-switch" title={user?.role !== 'admin' ? 'Admin role required' : 'Toggle server'}>
                     <input
                       type="checkbox"
-                      checked={active}
+                      checked={isEnabled}
                       disabled={isToggling || user?.role !== 'admin'}
                       onChange={() => handleToggle(server)}
                     />
@@ -196,16 +206,22 @@ export default function ServersView({ user }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                   <div style={{ background: 'var(--surface-soft)', padding: '10px 12px', borderRadius: 'var(--radius-md)' }}>
                     <div style={{ fontSize: '11px', color: 'var(--mute)', textTransform: 'uppercase', fontWeight: '700' }}>Exported Tools</div>
-                    <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '800', color: isUnreachable ? 'var(--accent-red)' : 'var(--ink)' }}>
                       {toolCount}
                     </div>
                   </div>
                   <div style={{ background: 'var(--surface-soft)', padding: '10px 12px', borderRadius: 'var(--radius-md)' }}>
                     <div style={{ fontSize: '11px', color: 'var(--mute)', textTransform: 'uppercase', fontWeight: '700' }}>Health Latency</div>
-                    <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Clock size={15} />
-                      {server.latency_ms ? `${server.latency_ms}ms` : '<15ms'}
-                    </div>
+                    {!isEnabled ? (
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--mute)', marginTop: '2px' }}>Disabled</div>
+                    ) : isUnreachable ? (
+                      <div style={{ fontSize: '13px', fontWeight: '800', color: 'var(--accent-red)', marginTop: '2px' }}>Timeout (Offline)</div>
+                    ) : (
+                      <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={15} />
+                        {server.latency_ms ? `${server.latency_ms}ms` : '<15ms'}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -220,17 +236,19 @@ export default function ServersView({ user }) {
                   fontSize: '13px',
                 }}
               >
-                <span className={`status-badge ${active ? 'success' : 'error'}`}>
-                  {active ? (
-                    <>
-                      <CheckCircle2 size={12} /> Connected
-                    </>
-                  ) : (
-                    <>
-                      <XCircle size={12} /> Disabled in Mesh
-                    </>
-                  )}
-                </span>
+                {!isEnabled ? (
+                  <span className="status-badge forbidden">
+                    <AlertTriangle size={12} /> Disabled in Mesh
+                  </span>
+                ) : isUnreachable ? (
+                  <span className="status-badge error">
+                    <XCircle size={12} /> Unreachable (Degraded)
+                  </span>
+                ) : (
+                  <span className="status-badge success">
+                    <CheckCircle2 size={12} /> Connected
+                  </span>
+                )}
 
                 {user?.role !== 'admin' && (
                   <span style={{ fontSize: '11px', color: 'var(--mute)', display: 'flex', alignItems: 'center', gap: '4px' }}>
