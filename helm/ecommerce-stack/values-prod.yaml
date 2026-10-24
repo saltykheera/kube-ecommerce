@@ -1,0 +1,152 @@
+# Production Helm values for ecommerce-stack (Cloud VPS / EKS / GKE)
+# Usage: helm upgrade --install ecommerce-stack ./helm/ecommerce-stack -f ./helm/ecommerce-stack/values-prod.yaml
+
+global:
+  domains:
+    store: store.ecommerce-prod.com
+    gateway: gateway.ecommerce-prod.com
+    dashboard: dashboard.ecommerce-prod.com
+
+# Production Ingress TLS configuration
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: traefik
+  tls:
+    enabled: true
+    secretName: ecommerce-tls-cert
+
+mariadb:
+  enabled: true
+  database: wordpress_prod
+  user: wp_prod_user
+  password: wp_prod_vault_password_xyz
+  rootPassword: root_prod_vault_password_xyz
+  persistence:
+    size: 20Gi
+    storageClass: gp3  # Production high-IOPS EBS / Cloud SSD
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+wordpress:
+  enabled: true
+  image:
+    repository: wordpress
+    tag: 6.7-apache
+    pullPolicy: IfNotPresent
+  tablePrefix: wp_
+  persistence:
+    size: 30Gi
+    storageClass: gp3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1.5Gi
+
+postgres:
+  enabled: true
+  database: gateway_prod_db
+  user: gateway_prod_user
+  password: gateway_prod_vault_password_xyz
+  persistence:
+    size: 15Gi
+    storageClass: gp3
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 800m
+      memory: 512Mi
+
+gateway:
+  enabled: true
+  image:
+    repository: ghcr.io/company/ecommerce-gateway
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  replicas: 2
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+dashboard:
+  enabled: true
+  image:
+    repository: ghcr.io/company/ecommerce-dashboard
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+mcpUpstreams:
+  woocommerce:
+    enabled: true
+    image:
+      repository: ghcr.io/company/mcp-woocommerce
+      tag: v1.0.0
+      pullPolicy: IfNotPresent
+    port: 8000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 300m
+        memory: 256Mi
+  calculator:
+    enabled: true
+    image:
+      repository: ghcr.io/company/mcp-calculator
+      tag: v1.0.0
+      pullPolicy: IfNotPresent
+    port: 8001
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 150m
+        memory: 128Mi
+  metrics:
+    enabled: true
+    image:
+      repository: ghcr.io/company/mcp-metrics
+      tag: v1.0.0
+      pullPolicy: IfNotPresent
+    port: 8002
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 150m
+        memory: 128Mi
+
+woocommerceSecrets:
+  consumerKey: "ck_prod_managed_vault_key"
+  consumerSecret: "cs_prod_managed_vault_secret"
+
+secrets:
+  geminiApiKey: "prod-vault-injected-gemini-key"
+
+networkPolicy:
+  enabled: true
