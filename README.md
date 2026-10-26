@@ -1,49 +1,62 @@
 # WooCommerce Hosting Platform with Team MCP Gateway on Kubernetes
 
-A production-grade, stateful Kubernetes deployment hosting WooCommerce with an integrated Model Context Protocol (MCP) Gateway layer for AI agents.
-
-## Architecture Overview
-
-1. **Storefront Layer**: WordPress + WooCommerce powered by a dedicated MariaDB database with PersistentVolumeClaims (PVCs), exposed via Traefik Ingress on `store.local`.
-2. **WooCommerce MCP Server**: Internal microservice translating MCP tool invocations into WooCommerce REST API operations.
-3. **Team MCP Gateway & Dashboard**: Centralized MCP server/client aggregator enforcing authentication, upstream discovery, tool namespacing, and database audit logs.
-4. **Chat Agent**: Dashboard-integrated tool-calling AI agent executing store tasks with user identity attribution.
+A production-grade, stateful Kubernetes deployment hosting WooCommerce with an integrated Model Context Protocol (MCP) Gateway layer for AI agents (Claude Code, Cursor, MCP Inspector, and Dashboard Chat).
 
 ---
 
-## Local Development Prerequisites
+## Quick Reference: Starting and Stopping
 
-- **macOS** or **Linux**
-- [Docker Desktop](https://www.docker.com/) (running)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/)
-- [k3d](https://k3d.io/) (`brew install k3d`)
-- [Helm](https://helm.sh/) (`brew install helm`)
+### To Start / Resume the Platform
+```bash
+./scripts/start.sh
+```
+*Checks Docker, resumes or initializes the k3d cluster, verifies all 8 pods are Ready, and displays active endpoints and credentials.*
+
+### To Stop / Pause the Platform
+```bash
+./scripts/stop.sh
+```
+*Safely pauses the cluster containers. CPU & RAM are immediately freed up, while **all WooCommerce products, orders, database tables, and persistent storage (PVCs) remain 100% saved on disk**.*
 
 ---
 
-## Quick Start (Day 1–2 Stack)
+## Live Endpoints & Default Credentials
 
-### 1. Initialize the k3d Cluster
-Creates a local 2-node cluster with ports `80` and `443` routed into Traefik Ingress:
+| Service | Local URL | Role | Credentials |
+| :--- | :--- | :--- | :--- |
+| **WooCommerce Store** | `http://store.local` | Public storefront & WP Admin | `admin` / `AdminSecurePassword123!` |
+| **PostHog Dashboard** | `http://dashboard.local` | Team & MCP Server Management | `admin@ecommerce.local` / `AdminSecurePassword123!`<br/>`member@ecommerce.local` / `MemberSecurePassword123!` |
+| **Central MCP Gateway** | `http://gateway.local/mcp` | Unified Streamable HTTP MCP Endpoint | `Authorization: Bearer <mcp_live_...>` |
+| **Gateway Health Check**| `http://gateway.local/health` | HTTP Liveness / Probe | *Public* |
+
+> [!NOTE]
+> Ensure local domain resolution is configured in `/etc/hosts`:
+> ```bash
+> sudo sh -c 'echo "127.0.0.1   store.local gateway.local dashboard.local" >> /etc/hosts'
+> ```
+
+---
+
+## Complete Verification Suite
+
+To run the unified **15-point Definition-of-Done demo verification script**:
 ```bash
-./scripts/init-cluster.sh
+./scripts/run-all-demo-checks.sh
 ```
 
-### 2. Configure Local DNS
-Add the local test domains to `/etc/hosts`:
+To run the **Zero-Trust NetworkPolicy isolation tests**:
 ```bash
-sudo sh -c 'echo "127.0.0.1   store.local gateway.local dashboard.local" >> /etc/hosts'
+./scripts/test-network-policies.sh
 ```
 
-### 3. Deploy the Helm Stack
+To run the **Chaos & Fault-Tolerance test suite**:
 ```bash
-helm upgrade --install ecommerce-stack ./helm/ecommerce-stack
+./scripts/test-chaos-fault-tolerance.sh
 ```
 
-### 4. Configure WooCommerce & Seed Initial Store Data
-```bash
-./scripts/setup-woocommerce.sh
-```
+---
 
-Open `http://store.local` in your browser to access the live storefront.
-Admin credentials: `admin` / `AdminSecurePassword123!`.
+## Architecture & Technical Decisions
+For a deep dive into the 8 microservices, request flows, day-by-day engineering decisions, and Round 2 interview defense, read [**`ARCHITECTURE.md`**](file:///Users/vishalkumar/kube-ecommerce/ARCHITECTURE.md).
+
+For the STRIDE security analysis and trust boundaries, read [**`THREAT_MODEL.md`**](file:///Users/vishalkumar/kube-ecommerce/THREAT_MODEL.md).
