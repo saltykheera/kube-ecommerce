@@ -121,7 +121,11 @@ Dockerfile: Minimal non-root container image.
 helm/ecommerce-stack/templates/gateway.yaml:
 Gateway Deployment, ClusterIP Service, and Ingress routing http://gateway.local to the gateway.
 Verification Flow (Definition of Done)
-Connect MCP Inspector to http://gateway.local/mcp:
-Verify all 11 tools appear with their clean namespaces.
-Execute a product tool (woo__list_products) and a calculator tool (calc__calculate) through the single gateway URL.
-Fault tolerance test: Deliberately kill mcp-calculator pod $\rightarrow$ prove that woo__... and metrics__... tools still work smoothly.
+1. Connect MCP Inspector to http://gateway.local/mcp:
+   - Verified all 11 tools appear with their clean namespaces (`woo__`, `calc__`, `metrics__`).
+2. Execute cross-server workflow:
+   - Automated via `scripts/test-cross-server.py`: chained `woo__list_products` -> `calc__tax_calculation` -> `metrics__calculate_revenue_summary` cleanly.
+3. Fault tolerance test:
+   - Automated via `scripts/test-fault-tolerance.sh`: scaled `mcp-calculator` to 0; verified gateway isolates failure, keeps serving live tools, and updates PostgreSQL registry dynamically. Restored to 1 replica smoothly.
+
+STATUS: ALL DAYS 4–5 PHASES (1, 2, 3) 100% COMPLETED AND VERIFIED.
