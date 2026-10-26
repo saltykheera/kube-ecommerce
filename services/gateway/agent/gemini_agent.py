@@ -11,12 +11,14 @@ import logging
 import asyncio
 from typing import Any, Optional
 import httpx
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from aggregator import aggregator
 from agent.tool_converter import convert_mcp_tools_to_gemini
 from core.rbac import is_tool_allowed_for_role
 from models.user import User
+from models.api_key import APIKey
 from models.audit_log import AuditLog
 
 logger = logging.getLogger("gemini-agent")
@@ -101,6 +103,15 @@ class GeminiChatAgent:
         """
         logger.info(f"Chat request from {user.email} (Role: {user.role.value}): '{message[:60]}...'")
 
+        # Check active API key status for the user in PostgreSQL
+        # Ensures 100% security consistency: when an API key is revoked, the Chat Agent
+        # immediately blocks tool execution and refuses to expose store details.
+        key_stmt = select(APIKey).where(APIKey.user_id == user.id, APIKey.is_active == True)
+        active_key = (await session.exec(key_stmt)).first()
+        all_keys_stmt = select(APIKey).where(APIKey.user_id == user.id)
+        any_key = (await session.exec(all_keys_stmt)).first()
+        has_active_key = active_key is not None
+
         # 1. Fetch available tools from the gateway
         tools = await aggregator.refresh_tools()
         gemini_tools = convert_mcp_tools_to_gemini(tools)
@@ -115,8 +126,24 @@ class GeminiChatAgent:
             f"When answering questions, call tools to get real data rather than making assumptions. "
             f"Current authenticated user: {user.email} (Role: {user.role.value})."
         )
+
+        if not has_active_key:
+            if any_key:
+                system_instruction += (
+                    " CRITICAL SECURITY POLICY: This user's API key has been REVOKED. "
+                    "All tool calls will be rejected with 'Unauthorized'. "
+                    "You MUST NOT display, summarize, or fabricate any store products, prices, inventory, orders, or private metrics. "
+                    "If the user asks for store data or actions, state clearly that their API key has been revoked and they are unauthorized."
+                )
+            else:
+                system_instruction += (
+                    " CRITICAL SECURITY POLICY: This user has no active API key. "
+                    "You MUST NOT display or fabricate store products or internal data. "
+                    "Inform the user to generate an API key in the 'API Keys' tab first."
+                )
+
         contents.append({"role": "user", "parts": [{"text": system_instruction}]})
-        contents.append({"role": "model", "parts": [{"text": "Understood. I am ready to assist using available tools."}]})
+        contents.append({"role": "model", "parts": [{"text": "Understood. I will strictly enforce security policies and tool authentication."}]})
 
         # Append previous message history if any
         if history:
@@ -174,35 +201,48 @@ class GeminiChatAgent:
                 # Append model's exact content (preserving thoughtSignature)
                 contents.append(model_content)
 
-                # Check RBAC
-                is_allowed, rbac_error = is_tool_allowed_for_role(tool_name, user.role)
                 slug = tool_name.split("__")[0] if "__" in tool_name else "unknown"
 
-                if not is_allowed:
-                    logger.warning(f"RBAC blocked chat agent execution of '{tool_name}' for {user.email}")
-                    tool_result = {"isError": True, "error": rbac_error}
-                    tool_status = "forbidden"
+                # 1. Immediate Check: API Key Revocation Enforcement
+                # If a user's API key is revoked, they cannot execute tools via the AI agent.
+                if not has_active_key:
+                    if any_key:
+                        key_error_msg = "Unauthorized: Your API key has been revoked. Tool execution and store access are disabled."
+                    else:
+                        key_error_msg = "Unauthorized: No active API key found. Please generate an API key in the 'API Keys' tab."
+
+                    logger.warning(f"Key enforcement blocked chat agent execution of '{tool_name}' for {user.email}: {key_error_msg}")
+                    tool_result = {"isError": True, "error": key_error_msg}
+                    tool_status = "unauthorized"
                     duration_ms = 0.0
                 else:
-                    start_time = time.perf_counter()
-                    raw_result = await aggregator.call_tool(tool_name, tool_args)
-                    duration_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
-                    is_error = raw_result.get("isError", False)
-                    tool_status = "error" if is_error else "success"
-                    tool_result = raw_result
+                    # 2. RBAC Enforcement (Admin vs Member permissions)
+                    is_allowed, rbac_error = is_tool_allowed_for_role(tool_name, user.role)
+                    if not is_allowed:
+                        logger.warning(f"RBAC blocked chat agent execution of '{tool_name}' for {user.email}")
+                        tool_result = {"isError": True, "error": rbac_error}
+                        tool_status = "forbidden"
+                        duration_ms = 0.0
+                    else:
+                        start_time = time.perf_counter()
+                        raw_result = await aggregator.call_tool(tool_name, tool_args)
+                        duration_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
+                        is_error = raw_result.get("isError", False)
+                        tool_status = "error" if is_error else "success"
+                        tool_result = raw_result
 
                 # Record in PostgreSQL Audit Trail under the logged-in user
                 try:
                     audit_entry = AuditLog(
                         user_id=user.id,
                         user_email=user.email,
-                        api_key_id=None,  # Called via Dashboard session
+                        api_key_id=active_key.id if active_key else None,
                         server_slug=slug,
                         tool_name=tool_name,
                         arguments=json.dumps(tool_args),
                         status=tool_status,
                         duration_ms=duration_ms,
-                        error_message=str(tool_result) if tool_status != "success" else None,
+                        error_message=str(tool_result.get("error")) if tool_status in ("unauthorized", "forbidden", "error") else None,
                     )
                     session.add(audit_entry)
                     await session.commit()
