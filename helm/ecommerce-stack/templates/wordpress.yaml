@@ -74,6 +74,12 @@ spec:
           volumeMounts:
             - name: wordpress-data
               mountPath: /var/www/html
+            {{- if .Values.wordpress.demoTuning.enabled }}
+            - name: wordpress-demo-config
+              mountPath: /etc/apache2/conf-enabled/zz-demo.conf
+              subPath: apache.conf
+              readOnly: true
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /wp-includes/images/blank.gif
@@ -101,4 +107,9 @@ spec:
         - name: wordpress-data
           persistentVolumeClaim:
             claimName: wordpress-pvc
+        {{- if .Values.wordpress.demoTuning.enabled }}
+        - name: wordpress-demo-config
+          configMap:
+            name: wordpress-demo-config
+        {{- end }}
 {{- end }}

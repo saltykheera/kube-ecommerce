@@ -54,6 +54,10 @@ spec:
         - name: mariadb
           image: mariadb:11.4
           imagePullPolicy: IfNotPresent
+          {{- with .Values.mariadb.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
@@ -94,12 +98,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+            {{- toYaml .Values.mariadb.resources | nindent 12 }}
       volumes:
         - name: mariadb-data
           persistentVolumeClaim:

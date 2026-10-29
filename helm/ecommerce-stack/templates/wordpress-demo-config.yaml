@@ -1,0 +1,21 @@
+{{- if and .Values.wordpress.enabled .Values.wordpress.demoTuning.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wordpress-demo-config
+  labels:
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/part-of: ecommerce-stack
+data:
+  apache.conf: |
+    # Bound PHP process count for a small, sequential demo workload.
+    <IfModule mpm_prefork_module>
+        StartServers 1
+        MinSpareServers 1
+        MaxSpareServers 1
+        ServerLimit 2
+        MaxRequestWorkers 2
+        MaxConnectionsPerChild 100
+    </IfModule>
+    KeepAliveTimeout 2
+{{- end }}

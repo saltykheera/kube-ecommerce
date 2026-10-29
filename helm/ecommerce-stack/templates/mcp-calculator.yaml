@@ -58,10 +58,5 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
           resources:
-            requests:
-              cpu: 25m
-              memory: 48Mi
-            limits:
-              cpu: 100m
-              memory: 96Mi
+            {{- toYaml .Values.mcpUpstreams.calculator.resources | nindent 12 }}
 {{- end }}

@@ -43,6 +43,14 @@ spec:
           env:
             - name: PORT
               value: "8000"
+            - name: GEMINI_MODEL
+              value: {{ .Values.gateway.geminiModel | default "gemini-flash-lite-latest" | quote }}
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gateway-auth-secret
+                  key: jwt-secret-key
+                  optional: true
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -62,6 +70,13 @@ spec:
                   name: gemini-secret
                   key: gemini-api-key
                   optional: true
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 36
           readinessProbe:
             httpGet:
               path: /health
