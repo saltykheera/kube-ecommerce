@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
+STORE_URL="${STORE_URL:-http://store.local}"
+WP_ADMIN_PASSWORD="${WP_ADMIN_PASSWORD:-AdminSecurePassword123!}"
 
 echo "=== [1/6] Ensuring wp-cli & dev auth mu-plugin is installed ==="
 WP_POD=$(kubectl get pod -l app.kubernetes.io/name=wordpress -o jsonpath='{.items[0].metadata.name}')
@@ -58,14 +61,16 @@ echo "=== [2/6] Verifying WordPress installation ==="
 kubectl exec "${WP_POD}" -- wp core is-installed --allow-root || {
     echo "Installing WordPress core..."
     kubectl exec "${WP_POD}" -- wp core install \
-        --url="http://store.local" \
+        --url="${STORE_URL}" \
         --title="Kube Ecommerce Store" \
         --admin_user="admin" \
-        --admin_password="AdminSecurePassword123!" \
+        --admin_password="${WP_ADMIN_PASSWORD}" \
         --admin_email="admin@example.com" \
         --skip-email \
         --allow-root
 }
+kubectl exec "${WP_POD}" -- wp option update home "${STORE_URL}" --allow-root
+kubectl exec "${WP_POD}" -- wp option update siteurl "${STORE_URL}" --allow-root
 
 echo "=== [3/6] Setting permalink structure (required for REST API) ==="
 kubectl exec "${WP_POD}" -- wp rewrite structure '/%postname%/' --allow-root
@@ -147,8 +152,6 @@ if ($existing) {
 }
 ' --allow-root)
 
-echo "WooCommerce Keys Output: ${KEYS_JSON}"
-
 CK=$(echo "${KEYS_JSON}" | jq -r '.consumer_key')
 CS=$(echo "${KEYS_JSON}" | jq -r '.consumer_secret')
 
@@ -163,7 +166,7 @@ if [ -f woocommerce-keys.env ]; then
 fi
 
 cat <<EOF > woocommerce-keys.env
-WOOCOMMERCE_URL="http://store.local"
+WOOCOMMERCE_URL="${STORE_URL}"
 WOOCOMMERCE_INTERNAL_URL="http://wordpress.default.svc.cluster.local:80"
 WOOCOMMERCE_CONSUMER_KEY="${CK}"
 WOOCOMMERCE_CONSUMER_SECRET="${CS}"
