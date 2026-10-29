@@ -31,7 +31,7 @@ MAX_TOOL_TURNS = 5
 class GeminiChatAgent:
     def __init__(self):
         self.api_key = GEMINI_API_KEY
-        self.preferred_model = "gemini-flash-lite-latest"
+        self.preferred_model = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 
     def _get_api_key(self) -> str:
         """Dynamically re-reads environment or gemini.env if not set in memory."""
@@ -65,11 +65,14 @@ class GeminiChatAgent:
 
         last_error = None
         for model in models:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             for attempt in range(1, 3):
                 try:
-                    async with httpx.AsyncClient(timeout=12.0) as client:
-                        resp = await client.post(url, json=payload, headers={"Content-Type": "application/json"})
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(url, json=payload, headers={
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": api_key,
+                        })
                         if resp.status_code == 503:
                             logger.warning(f"Model {model} returned 503 (attempt {attempt}/2). Retrying in 1.5s...")
                             await asyncio.sleep(1.5)
