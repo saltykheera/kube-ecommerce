@@ -8,6 +8,13 @@ exec_plan/
 # Secrets & Environment
 *.env*
 !*.env.example
+*_accessKeys.csv
+*.pem
+kubeconfig-aws.yaml
+cloud-secrets.json
+demo-access.json
+/helm/ecommerce-stack/values-aws.yaml
+/.agents/mcp_config.json
 
 # macOS system files
 .DS_Store
