@@ -20,6 +20,14 @@ A production-grade, stateful Kubernetes deployment hosting WooCommerce with an i
 
 ---
 
+## Production deployment
+- Dashboard : http://dashboard.16.178.123.74.nip.io/
+- Store : http://store.16.178.123.74.nip.io/shop/
+- WordPress admin : http://store.16.178.123.74.nip.io/wp-admin/ 
+- MCP endpoint : http://gateway.16.178.123.74.nip.io/mcp
+
+
+
 ## Small EC2 Kubernetes Demo
 
 For a sequential demo, use the optional [demo values](helm/ecommerce-stack/values-demo.yaml).
@@ -40,7 +48,6 @@ After preparing K3s and importing images, apply the demo profile last:
 helm upgrade --install ecommerce-stack ./helm/ecommerce-stack \
   -f ./helm/ecommerce-stack/values-aws.yaml \
   -f ./helm/ecommerce-stack/values-demo.yaml \
-  -f ./cloud-secrets.json \
   --wait --timeout 10m
 kubectl get pods
 kubectl top nodes
@@ -51,9 +58,6 @@ kubectl top pods
 deployment script. That script currently builds images on the VM; it needs an external
 build/import workflow before being used on this smaller target. Keep the existing PVC
 sizes when upgrading an installed release; Kubernetes cannot shrink PVCs.
-Run the upgrade on the configured VM, where `cloud-secrets.json` preserves the deployed
-database passwords and API keys. See [EC2 deployment details](EC2-DEPLOYMENT.md) for
-the current host, access links, and update instructions.
 After WooCommerce setup, verify storefront access, dashboard login, and an MCP tool call
 while checking memory and pod restarts. `kubectl top` requires the metrics-server to be ready.
 
