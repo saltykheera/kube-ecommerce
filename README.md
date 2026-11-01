@@ -21,10 +21,24 @@ A production-grade, stateful Kubernetes deployment hosting WooCommerce with an i
 ---
 
 ## Production deployment
-- Dashboard : http://dashboard.16.178.123.74.nip.io/
-- Store : http://store.16.178.123.74.nip.io/shop/
-- WordPress admin : http://store.16.178.123.74.nip.io/wp-admin/ 
-- MCP endpoint : http://gateway.16.178.123.74.nip.io/mcp
+- **Dashboard**: http://dashboard.16.178.123.74.nip.io/
+- **Store**: http://store.16.178.123.74.nip.io/shop/
+- **WordPress admin**: http://store.16.178.123.74.nip.io/wp-admin/
+- **MCP endpoint**: http://gateway.16.178.123.74.nip.io/mcp
+
+### Production Demo Credentials
+
+Open [Dashboard](http://dashboard.16.178.123.74.nip.io), clear both fields completely, and enter:
+- **Email**: `admin@ecommerce.local`
+- **Password**: `XVt5iBy8BxxtDrxyjRRoTH4G`
+
+| Service | URL | Role | Username / Email | Password / Token |
+| :--- | :--- | :--- | :--- | :--- |
+| **PostHog Dashboard (Admin)** | `http://dashboard.16.178.123.74.nip.io` | Admin | `admin@ecommerce.local` | `XVt5iBy8BxxtDrxyjRRoTH4G` |
+| **PostHog Dashboard (Member)** | `http://dashboard.16.178.123.74.nip.io` | Member | `member@ecommerce.local` | `ZPQYTboaR4I_iZ-AfAHeejS9` |
+| **WordPress Store Admin** | `http://store.16.178.123.74.nip.io/wp-admin/` | Admin | `admin` | `-yJgao_RzRMGTpgMxWuF7rE1` |
+| **Admin MCP API Key** | `http://gateway.16.178.123.74.nip.io/mcp` | Admin | Bearer Token | `mcp_live_9914215ef98194a09982e6c0c2ba22427eb4696198b0fce4` |
+| **Member MCP API Key** | `http://gateway.16.178.123.74.nip.io/mcp` | Member | Bearer Token | `mcp_live_4d344f0d48bcb134a9aee967a80d2c3682f549f9a2740c07` |
 
 
 
