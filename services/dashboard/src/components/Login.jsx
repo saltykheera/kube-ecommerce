@@ -3,11 +3,26 @@ import { api } from '../api';
 import { ArrowRight, ShieldCheck, UserCheck } from 'lucide-react';
 import HedgehogMascot from './HedgehogMascot';
 
+// Public demo credentials; cloud builds supply their own demo account values.
+const DEMO_ACCOUNTS = {
+  admin: {
+    email: 'admin@ecommerce.local',
+    password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'AdminSecurePassword123!',
+  },
+  member: {
+    email: 'member@ecommerce.local',
+    password: import.meta.env.VITE_DEMO_MEMBER_PASSWORD || 'MemberSecurePassword123!',
+  },
+};
+
 export default function Login({ onLoginSuccess }) {
-  const [email, setEmail] = useState('admin@ecommerce.local');
-  const [password, setPassword] = useState('AdminSecurePassword123!');
+  const [email, setEmail] = useState(DEMO_ACCOUNTS.admin.email);
+  const [password, setPassword] = useState(DEMO_ACCOUNTS.admin.password);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const demoAccount = Object.values(DEMO_ACCOUNTS).find(
+    (account) => account.email === email.trim().toLowerCase(),
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,13 +39,8 @@ export default function Login({ onLoginSuccess }) {
   };
 
   const setQuickUser = (role) => {
-    if (role === 'admin') {
-      setEmail('admin@ecommerce.local');
-      setPassword('AdminSecurePassword123!');
-    } else {
-      setEmail('member@ecommerce.local');
-      setPassword('MemberSecurePassword123!');
-    }
+    setEmail(DEMO_ACCOUNTS[role].email);
+    setPassword(DEMO_ACCOUNTS[role].password);
     setError('');
   };
 
@@ -76,6 +86,7 @@ export default function Login({ onLoginSuccess }) {
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '16px' }}>
             <label
+              htmlFor="input-login-email"
               style={{
                 display: 'block',
                 fontSize: '12px',
@@ -101,6 +112,7 @@ export default function Login({ onLoginSuccess }) {
 
           <div style={{ marginBottom: '24px' }}>
             <label
+              htmlFor="input-login-password"
               style={{
                 display: 'block',
                 fontSize: '12px',
@@ -119,9 +131,15 @@ export default function Login({ onLoginSuccess }) {
               className="input-field"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
+              placeholder={demoAccount?.password || 'Enter your password'}
+              aria-describedby={demoAccount ? 'demo-password-hint' : undefined}
               required
             />
+            {demoAccount && (
+              <p id="demo-password-hint" style={{ marginTop: '8px', fontSize: '12px', color: 'var(--mute)', overflowWrap: 'anywhere' }}>
+                Demo password: <code>{demoAccount.password}</code>
+              </p>
+            )}
           </div>
 
           <button

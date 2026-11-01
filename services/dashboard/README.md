@@ -1,5 +1,16 @@
 # React + Vite
 
+## Demo login credentials
+
+The login defaults, password hint, and Admin/Member quick-fill buttons share the
+same account configuration. Local builds use the local demo passwords. Cloud demo
+builds set `VITE_DEMO_ADMIN_PASSWORD` and `VITE_DEMO_MEMBER_PASSWORD` to match the
+deployed accounts. The Dockerfile accepts both as build arguments.
+
+These values are intentionally visible on the login page and included in the
+public JavaScript bundle. Use them only for public demo accounts, never private
+production credentials. Changing a build value does not change the backend password.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

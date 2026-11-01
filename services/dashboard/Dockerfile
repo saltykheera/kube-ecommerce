@@ -6,6 +6,9 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+# These values are intentionally public in the demo login page and JS bundle.
+ARG VITE_DEMO_ADMIN_PASSWORD
+ARG VITE_DEMO_MEMBER_PASSWORD
 RUN npm run build
 
 # Stage 2: Serve with Nginx Alpine

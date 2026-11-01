@@ -47,7 +47,10 @@ the WooCommerce API connection. Pod environment variables sourced from changed
 Secrets require a rollout restart to take effect.
 
 Application images were built locally for `linux/amd64` and imported into K3s
-containerd. Cloud values select `ec2-demo` images, with gateway `ec2-demo-v2`.
+containerd. Cloud values select `ec2-demo` images, with gateway `ec2-demo-v2`
+and dashboard `ec2-demo-login-v1`. The dashboard demo build supplies
+`VITE_DEMO_ADMIN_PASSWORD` and `VITE_DEMO_MEMBER_PASSWORD` from the saved credentials
+so the visible password hints and quick-fill buttons match the backend accounts.
 Use new tags when rebuilding and import images before upgrading the release.
 The demo selects `gemini-3.1-flash-lite` and uses the existing Gemini API key;
 chat remains subject to the external provider's availability and quota.
